@@ -20,10 +20,10 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 # ---------------- AGREGAR PRODUCTO ----------------
-st.subheader("➕ Agregar producto en tiempo real")
+st.subheader("➕ Agregar producto")
 
-with st.form("form_add"):
-    name = st.text_input("Nombre del producto")
+with st.form("add_form"):
+    name = st.text_input("Nombre")
     stock = st.number_input("Stock", min_value=0, step=1)
     price = st.number_input("Precio", min_value=0.0, format="%.2f")
 
@@ -36,42 +36,86 @@ with st.form("form_add"):
                 "stock": int(stock),
                 "price": float(price)
             })
-            st.success("Producto agregado correctamente")
+            st.success("Producto agregado")
             st.rerun()
         else:
             st.warning("Escribe un nombre")
 
-# ---------------- OBTENER PRODUCTOS ----------------
+# ---------------- FUNCION OBTENER ----------------
 def get_products():
-    try:
-        docs = db.collection("inventario").stream()
+    docs = db.collection("inventario").stream()
 
-        products = []
+    products = []
+    for doc in docs:
+        data = doc.to_dict()
+        data["id"] = doc.id
+        products.append(data)
 
-        for doc in docs:
-            data = doc.to_dict()
+    return products
 
-            products.append({
-                "Nombre": data.get("name", "Sin nombre"),
-                "Stock": data.get("stock", 0),
-                "Precio": data.get("price", 0),
-                "ID": doc.id
-            })
+# ---------------- ELIMINAR ----------------
+def delete_product(product_id):
+    db.collection("inventario").document(product_id).delete()
 
-        return products
-
-    except Exception as e:
-        st.error("Error leyendo Firestore")
-        st.error(e)
-        return []
+# ---------------- EDITAR ----------------
+def update_product(product_id, name, stock, price):
+    db.collection("inventario").document(product_id).update({
+        "name": name,
+        "stock": int(stock),
+        "price": float(price)
+    })
 
 # ---------------- UI ----------------
-st.subheader("📦 Productos en la nube")
+st.subheader("📦 Productos")
 
 products = get_products()
 
-if products:
-    st.dataframe(products, use_container_width=True)
-    st.success(f"Total productos: {len(products)}")
-else:
-    st.warning("No hay productos en Firestore")
+for p in products:
+    with st.container():
+        st.markdown("---")
+
+        st.write(f"**Nombre:** {p.get('name')}")
+        st.write(f"Stock: {p.get('stock')}")
+        st.write(f"Precio: {p.get('price')}")
+
+        col1, col2, col3 = st.columns(3)
+
+        # ---------------- EDITAR ----------------
+        with col1:
+            with st.expander("✏️ Editar"):
+                new_name = st.text_input("Nombre", value=p.get("name"), key=f"name_{p['id']}")
+                new_stock = st.number_input("Stock", value=p.get("stock"), key=f"stock_{p['id']}")
+                new_price = st.number_input("Precio", value=p.get("price"), key=f"price_{p['id']}")
+
+                if st.button("Guardar cambios", key=f"save_{p['id']}"):
+                    update_product(p["id"], new_name, new_stock, new_price)
+                    st.success("Actualizado")
+                    st.rerun()
+
+        # ---------------- ELIMINAR CON CONFIRMACIÓN ----------------
+        with col2:
+            if f"confirm_{p['id']}" not in st.session_state:
+                st.session_state[f"confirm_{p['id']}"] = False
+
+            if not st.session_state[f"confirm_{p['id']}"]:
+                if st.button("🗑️ Eliminar", key=f"del_{p['id']}"):
+                    st.session_state[f"confirm_{p['id']}"] = True
+                    st.warning("Confirma eliminación")
+
+            else:
+                st.error("¿Seguro que quieres eliminar?")
+                col_a, col_b = st.columns(2)
+
+                with col_a:
+                    if st.button("Sí, eliminar", key=f"yes_{p['id']}"):
+                        delete_product(p["id"])
+                        st.success("Eliminado")
+                        st.rerun()
+
+                with col_b:
+                    if st.button("Cancelar", key=f"no_{p['id']}"):
+                        st.session_state[f"confirm_{p['id']}"] = False
+                        st.rerun()
+
+        with col3:
+            st.info("Gestión de producto")
