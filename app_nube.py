@@ -11,7 +11,7 @@ st.title("☁️ Inventario en la Nube (Firebase)")
 # ---------------- FIREBASE INIT ----------------
 if not firebase_admin._apps:
     try:
-        cred = credentials.Certificate(st.secrets["firebase"])
+       cred = credentials.Certificate(dict(st.secrets["firebase"]))
         firebase_admin.initialize_app(cred)
     except Exception as e:
         st.error("Error conectando Firebase")
